@@ -7,7 +7,71 @@ const app  = express();
 const PORT = process.env.PORT || 4000;
 
 app.use(cors());
-app.use(express.json({ limit: '5mb' })); // voor base64 handtekeningen
+app.use(express.json({ limit: '5mb' }));
+
+// ─── Database schema initialisatie ──────────────────────────────────────────
+// Tabellen worden automatisch aangemaakt als ze nog niet bestaan.
+// Dit vervangt het init.sql bestand — geen lokale bestanden nodig.
+
+async function initDB() {
+  const conn = await pool.getConnection();
+  try {
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS persons (
+        id         VARCHAR(36)  NOT NULL PRIMARY KEY,
+        first_name VARCHAR(100) NOT NULL,
+        last_name  VARCHAR(100) NOT NULL,
+        created_at DATETIME     DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS rooms (
+        id   VARCHAR(50)  NOT NULL PRIMARY KEY,
+        name VARCHAR(200) NOT NULL
+      )
+    `);
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS key_types (
+        id         VARCHAR(36)  NOT NULL PRIMARY KEY,
+        name       VARCHAR(100) NOT NULL,
+        rooms_json TEXT
+      )
+    `);
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS \`keys\` (
+        id          VARCHAR(36) NOT NULL PRIMARY KEY,
+        number      VARCHAR(50) NOT NULL UNIQUE,
+        key_type_id VARCHAR(36) NOT NULL,
+        FOREIGN KEY (key_type_id) REFERENCES key_types(id)
+      )
+    `);
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS key_rooms (
+        key_id  VARCHAR(36) NOT NULL,
+        room_id VARCHAR(50) NOT NULL,
+        PRIMARY KEY (key_id, room_id),
+        FOREIGN KEY (key_id)  REFERENCES \`keys\`(id)  ON DELETE CASCADE,
+        FOREIGN KEY (room_id) REFERENCES rooms(id)     ON DELETE CASCADE
+      )
+    `);
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id              VARCHAR(36) NOT NULL PRIMARY KEY,
+        key_id          VARCHAR(36) NOT NULL,
+        person_id       VARCHAR(36) NOT NULL,
+        type            ENUM('ISSUED','RETURNED','LOST','BROKEN','EXTENDED') NOT NULL,
+        timestamp       BIGINT      NOT NULL,
+        signature       MEDIUMTEXT,
+        expiration_date BIGINT,
+        FOREIGN KEY (key_id)    REFERENCES \`keys\`(id),
+        FOREIGN KEY (person_id) REFERENCES persons(id)
+      )
+    `);
+    console.log('Database schema gereed.');
+  } finally {
+    conn.release();
+  }
+}
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -41,7 +105,7 @@ app.get('/api/rooms', async (req, res) => {
 });
 
 app.post('/api/rooms/import', async (req, res) => {
-  const { rooms } = req.body; // [{ id, name }]
+  const { rooms } = req.body;
   let added = 0;
   for (const r of rooms) {
     await pool.query('INSERT IGNORE INTO rooms (id, name) VALUES (?, ?)', [r.id, r.name]);
@@ -65,7 +129,7 @@ app.post('/api/keytypes', async (req, res) => {
   res.status(201).json({ id, name, rooms });
 });
 
-// ─── KEYS ──────────────────────────────────────────────────────────────────
+// ─── KEYS ─────────────────────────────────────────────────────────────────
 
 app.get('/api/keys', async (req, res) => {
   const [keys] = await pool.query('SELECT id, number, key_type_id AS keyTypeId FROM `keys` ORDER BY number');
@@ -85,7 +149,7 @@ app.post('/api/keys', async (req, res) => {
 });
 
 app.post('/api/keys/import', async (req, res) => {
-  const { keys } = req.body; // [{ number, typeName }]
+  const { keys } = req.body;
   let added = 0;
   for (const k of keys) {
     let [types] = await pool.query('SELECT id FROM key_types WHERE name = ?', [k.typeName]);
@@ -184,8 +248,16 @@ app.post('/api/transactions/broken', async (req, res) => {
   res.status(201).json({ id, keyId, personId, type: 'BROKEN', timestamp });
 });
 
-// ─── start ─────────────────────────────────────────────────────────────────
+// ─── Start ─────────────────────────────────────────────────────────────────
 
-app.listen(PORT, () => {
-  console.log(`Sleutelbeheer API luistert op poort ${PORT}`);
-});
+// Eerst tabellen aanmaken, dan pas luisteren
+initDB()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Sleutelbeheer API luistert op poort ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('Database initialisatie mislukt:', err);
+    process.exit(1);
+  });

@@ -1,6 +1,9 @@
 # ============================================================
 # Sleutelbeheer-MVV29 — Docker Compose voor TrueNAS SCALE
-# Pas ALLEEN de wachtwoorden en de poort aan — het pad is al ingesteld
+# Kopieer en plak dit in TrueNAS → Apps → Custom App → YAML
+#
+# Pas ALLEEN de drie wachtwoorden en de poort aan.
+# Docker haalt de broncode automatisch op van GitHub.
 # ============================================================
 
 version: "3.8"
@@ -19,7 +22,6 @@ services:
       MYSQL_PASSWORD: changeme_password           # ← Verander dit
     volumes:
       - /mnt/SSDs/transcode/mysql:/var/lib/mysql
-      - ./server/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "sleutel", "-pchangeme_password"]
       interval: 10s
@@ -29,9 +31,8 @@ services:
 
   # ── Node.js API backend ─────────────────────────────────────
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
+    build: https://github.com/NGoossen01/Sleutelbeheer-MVV29.git#truenas-mysql:.
+    dockerfile: Dockerfile.api
     container_name: sleutelbeheer-api
     restart: unless-stopped
     depends_on:
@@ -46,11 +47,10 @@ services:
       PORT: 4000
       NODE_ENV: production
 
-  # ── Nginx (frontend + reverse proxy) ────────────────────────
+  # ── Nginx + React frontend ─────────────────────────────────
   nginx:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
+    build: https://github.com/NGoossen01/Sleutelbeheer-MVV29.git#truenas-mysql:.
+    dockerfile: Dockerfile.frontend
     container_name: sleutelbeheer-web
     restart: unless-stopped
     depends_on:
