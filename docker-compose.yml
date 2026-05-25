@@ -31,8 +31,9 @@ services:
 
   # ── Node.js API backend ─────────────────────────────────────
   api:
-    build: https://github.com/NGoossen01/Sleutelbeheer-MVV29.git#truenas-mysql:.
-    dockerfile: Dockerfile.api
+    build:
+      context: https://github.com/NGoossen01/Sleutelbeheer-MVV29.git#truenas-mysql
+      dockerfile: Dockerfile.api
     container_name: sleutelbeheer-api
     restart: unless-stopped
     depends_on:
@@ -49,8 +50,9 @@ services:
 
   # ── Nginx + React frontend ─────────────────────────────────
   nginx:
-    build: https://github.com/NGoossen01/Sleutelbeheer-MVV29.git#truenas-mysql:.
-    dockerfile: Dockerfile.frontend
+    build:
+      context: https://github.com/NGoossen01/Sleutelbeheer-MVV29.git#truenas-mysql
+      dockerfile: Dockerfile.frontend
     container_name: sleutelbeheer-web
     restart: unless-stopped
     depends_on:
