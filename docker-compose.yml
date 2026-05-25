@@ -1,6 +1,6 @@
 # ============================================================
 # Sleutelbeheer-MVV29 — Docker Compose voor TrueNAS SCALE
-# Pas ALLEEN de variabelen onder 'environment' en 'volumes' aan
+# Pas ALLEEN de wachtwoorden en de poort aan — het pad is al ingesteld
 # ============================================================
 
 version: "3.8"
@@ -18,7 +18,7 @@ services:
       MYSQL_USER: sleutel
       MYSQL_PASSWORD: changeme_password           # ← Verander dit
     volumes:
-      - /mnt/tank/sleutelbeheer/mysql:/var/lib/mysql   # ← Pas linkerpad aan
+      - /mnt/SSDs/transcode/mysql:/var/lib/mysql
       - ./server/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "sleutel", "-pchangeme_password"]
