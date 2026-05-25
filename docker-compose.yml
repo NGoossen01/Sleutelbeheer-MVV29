@@ -1,0 +1,59 @@
+# ============================================================
+# Sleutelbeheer-MVV29 — Docker Compose voor TrueNAS SCALE
+# Pas ALLEEN de variabelen onder 'environment' en 'volumes' aan
+# ============================================================
+
+version: "3.8"
+
+services:
+
+  # ── MySQL database ──────────────────────────────────────────
+  db:
+    image: mysql:8.0
+    container_name: sleutelbeheer-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: changeme_root          # ← Verander dit
+      MYSQL_DATABASE: sleutelbeheer
+      MYSQL_USER: sleutel
+      MYSQL_PASSWORD: changeme_password           # ← Verander dit
+    volumes:
+      - /mnt/tank/sleutelbeheer/mysql:/var/lib/mysql   # ← Pas linkerpad aan
+      - ./server/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "sleutel", "-pchangeme_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── Node.js API backend ─────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: sleutelbeheer-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: sleutelbeheer
+      DB_USER: sleutel
+      DB_PASSWORD: changeme_password              # ← Zelfde als MYSQL_PASSWORD
+      PORT: 4000
+      NODE_ENV: production
+
+  # ── Nginx (frontend + reverse proxy) ────────────────────────
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: sleutelbeheer-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3000:80"                                 # ← Verander 3000 naar gewenste poort
